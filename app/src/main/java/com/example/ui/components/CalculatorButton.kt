@@ -27,6 +27,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
+import androidx.compose.ui.platform.LocalView
+import android.view.HapticFeedbackConstants
+import android.view.SoundEffectConstants
 import androidx.compose.ui.graphics.vector.ImageVector
 
 // iOS Palette Tokens
@@ -54,16 +57,19 @@ fun CalculatorButton(
     modifier: Modifier = Modifier,
     isActiveOperation: Boolean = false,
     isZeroButton: Boolean = false,
+    forceCircle: Boolean = false,
+    isCapsule: Boolean = false,
     icon: ImageVector? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val view = LocalView.current
 
     // Determine the base background and text colors
     val (baseBgColor, baseTextColor) = when (type) {
         ButtonType.NUMBER -> ColorDarkGray to ColorWhite
-        ButtonType.UTILITY -> ColorLightGray to ColorBlack
-        ButtonType.SCIENTIFIC -> Color(0xFF252525) to ColorWhite
+        ButtonType.UTILITY -> ColorLightGray to ColorWhite
+        ButtonType.SCIENTIFIC -> Color(0xFF212121) to ColorWhite
         ButtonType.OPERATION -> {
             if (isActiveOperation) {
                 ColorWhite to ColorOrange
@@ -80,7 +86,7 @@ fun CalculatorButton(
                 when (type) {
                     ButtonType.NUMBER -> Color(0xFF555555)
                     ButtonType.UTILITY -> Color(0xFFD5D5D5)
-                    ButtonType.SCIENTIFIC -> Color(0xFF444444)
+                    ButtonType.SCIENTIFIC -> Color(0xFF3A3A3C)
                     ButtonType.OPERATION -> {
                         if (isActiveOperation) Color(0xFFE5E5E5) else Color(0xFFFCDCA2)
                     }
@@ -91,9 +97,9 @@ fun CalculatorButton(
         label = "button_bg_color"
     )
 
-    // Dynamic scale feedback for a sleek feeling
+    // Dynamic scale feedback for a sleek feeling (Apple Spring style)
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.94f else 1.0f,
+        targetValue = if (isPressed) 0.90f else 1.0f,
         label = "button_scale"
     )
 
@@ -104,14 +110,20 @@ fun CalculatorButton(
             .then(
                 if (type == ButtonType.NUMBER) {
                     Modifier.shadow(
-                        elevation = 4.dp,
+                        elevation = 2.dp,
                         shape = CircleShape,
                         spotColor = Color.Black.copy(alpha = 0.5f)
                     )
                 } else Modifier
             )
             .then(
-                if (type == ButtonType.SCIENTIFIC) {
+                if (isCapsule) {
+                    Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(100.dp))
+                } else if (forceCircle) {
+                    Modifier
+                        .aspectRatio(1f)
+                        .clip(CircleShape)
+                } else if (type == ButtonType.SCIENTIFIC) {
                     Modifier
                         .height(44.dp)
                         .clip(androidx.compose.foundation.shape.RoundedCornerShape(100.dp))
@@ -127,7 +139,11 @@ fun CalculatorButton(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick
+                onClick = {
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    onClick()
+                }
             )
             .testTag("btn_${text.lowercase().replace("+/-", "sign").replace("%", "percent")}")
     ) {
@@ -143,12 +159,12 @@ fun CalculatorButton(
         ) {
             val fontSize = when {
                 type == ButtonType.SCIENTIFIC -> {
-                    if (text.length > 3) 14.sp else if (text.length > 1) 16.sp else 18.sp
+                    if (text.length > 4) 14.sp else if (text.length > 3) 15.sp else if (text.length > 1) 18.sp else 22.sp
                 }
-                text.length > 2 -> 22.sp
-                else -> 32.sp
+                text.length > 2 -> 24.sp
+                else -> 36.sp
             }
-            val fontWeight = if (type == ButtonType.SCIENTIFIC) FontWeight.Normal else FontWeight.Medium
+            val fontWeight = if (type == ButtonType.SCIENTIFIC) FontWeight.Medium else FontWeight.Medium
 
             if (icon != null) {
                 Icon(

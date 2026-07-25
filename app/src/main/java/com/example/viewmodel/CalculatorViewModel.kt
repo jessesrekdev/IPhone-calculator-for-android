@@ -19,7 +19,8 @@ enum class CalculatorMode {
     BASIC,
     SCIENTIFIC,
     MATHS_NOTES,
-    CONVERT
+    CONVERT,
+    ABOUT
 }
 
 class CalculatorViewModel(private val repository: HistoryRepository) : ViewModel() {
@@ -95,42 +96,91 @@ class CalculatorViewModel(private val repository: HistoryRepository) : ViewModel
         if (displayValue == "Error") {
             formulaText = ""
             displayValue = "0"
+            justEvaluated = false
         }
-        if (justEvaluated) {
-            if (func == "x²" || func == "x³" || func == "1/x" || func == "x!") {
-                formulaText = displayValue
-            } else {
+        
+        // Handle parenthesis inputs
+        if (func == "(" || func == ")") {
+            if (justEvaluated) {
                 formulaText = ""
+                justEvaluated = false
             }
+            formulaText += func
+            return
+        }
+
+        // Handle Constants
+        val constVal = when (func) {
+            "π" -> Math.PI
+            "e" -> Math.E
+            "Rand" -> Math.random()
+            else -> null
+        }
+        if (constVal != null) {
+            if (justEvaluated) {
+                formulaText = func
+                justEvaluated = false
+            } else {
+                val lastOpIdx = getLastOperandRange(formulaText)
+                if (lastOpIdx < formulaText.length && (formulaText[lastOpIdx].isDigit() || formulaText[lastOpIdx] == '.')) {
+                    formulaText = formulaText.substring(0, lastOpIdx) + func
+                } else {
+                    formulaText += func
+                }
+            }
+            isEnteringNewNumber = false
+            return
+        }
+
+        // Functions that act as postfix or wrap the entire expression so far
+        val postfixOps = setOf("x²", "x³", "1/x", "x!")
+        if (func in postfixOps) {
+            if (justEvaluated) {
+                formulaText = displayValue
+                justEvaluated = false
+            } else if (formulaText.isEmpty()) {
+                formulaText = displayValue
+            }
+            
+            val formulaFunc = when (func) {
+                "x²" -> "^2"
+                "x³" -> "^3"
+                "1/x" -> "^(-1)"
+                "x!" -> "!"
+                else -> ""
+            }
+            
+            val lastOpIdx = getLastOperandRange(formulaText)
+            if (lastOpIdx == 0 && !formulaText.startsWith("(")) {
+                // Wrap the whole thing
+                formulaText = "($formulaText)$formulaFunc"
+            } else {
+                val lastOperand = formulaText.substring(lastOpIdx)
+                formulaText = formulaText.substring(0, lastOpIdx) + "($lastOperand)$formulaFunc"
+            }
+            return
+        }
+        
+        // Functions that act as prefix with an open parenthesis (e.g. sin(, cos(, 10^(, etc.)
+        if (justEvaluated) {
+            formulaText = ""
             justEvaluated = false
         }
 
-        val appendStr = when (func) {
-            "x²" -> "^2"
-            "x³" -> "^3"
-            "1/x" -> "^(-1)"
-            "2√x" -> "√("
-            "3√x" -> "3√("
-            "ln" -> "ln("
+        val prefixFunc = when (func) {
+            "10^x" -> "10^("
+            "e^x" -> "e^("
             "log10" -> "log10("
-            "e^x" -> "e^"
-            "10^x" -> "10^"
-            "x!" -> "!"
-            "sin" -> "sin("
-            "cos" -> "cos("
-            "tan" -> "tan("
+            "log" -> "log("
+            "ln" -> "ln("
+            "2√x", "√" -> "√("
+            "3√x" -> "³√("
             "sin⁻¹" -> "sin⁻¹("
             "cos⁻¹" -> "cos⁻¹("
             "tan⁻¹" -> "tan⁻¹("
-            "sinh" -> "sinh("
-            "cosh" -> "cosh("
-            "tanh" -> "tanh("
-            "π" -> "π"
-            "e" -> "e"
-            "Rand" -> "Rand"
-            else -> func
+            else -> "$func("
         }
-        formulaText += appendStr
+        formulaText += prefixFunc
     }
 
     fun onPercentPressed() {
@@ -178,7 +228,31 @@ class CalculatorViewModel(private val repository: HistoryRepository) : ViewModel
     }
 
     fun onMemoryPressed(action: String) {
-        // Implement logic later
+        try {
+            val currentNum = if (formulaText.isNotEmpty()) {
+                BigDecimal(Evaluator(isDegreeMode).evaluate(formulaText))
+            } else {
+                BigDecimal(displayValue.replace(",", ""))
+            }
+            when (action) {
+                "mc" -> memoryValue = BigDecimal.ZERO
+                "mr" -> {
+                    displayValue = formatResult(memoryValue)
+                    formulaText = displayValue
+                    justEvaluated = true
+                }
+                "m+" -> memoryValue = memoryValue.add(currentNum)
+                "m-" -> memoryValue = memoryValue.subtract(currentNum)
+            }
+        } catch (e: Exception) {
+            if (action == "mc") {
+                memoryValue = BigDecimal.ZERO
+            } else if (action == "mr") {
+                displayValue = formatResult(memoryValue)
+                formulaText = displayValue
+                justEvaluated = true
+            }
+        }
     }
 
     fun onEEPressed() {
@@ -283,11 +357,73 @@ class CalculatorViewModel(private val repository: HistoryRepository) : ViewModel
             formattedInteger
         }
     }
+
+    private fun getLastOperandRange(formula: String): Int {
+        if (formula.isEmpty()) return 0
+        
+        // If it ends with ')', find the start of the matching parenthesis, then also include any leading letters/symbols (like 'sin', 'cos', '√')
+        if (formula.endsWith(")")) {
+            var parenCount = 0
+            var openParenIdx = -1
+            for (i in formula.length - 1 downTo 0) {
+                if (formula[i] == ')') parenCount++
+                else if (formula[i] == '(') parenCount--
+                if (parenCount == 0) {
+                    openParenIdx = i
+                    break
+                }
+            }
+            if (openParenIdx != -1) {
+                var start = openParenIdx
+                while (start > 0 && (formula[start - 1].isLetter() || formula[start - 1] == '√' || formula[start - 1] == '⁻' || formula[start - 1] == '¹' || formula[start - 1] == '²' || formula[start - 1] == '³')) {
+                    start--
+                }
+                return start
+            }
+            return 0
+        }
+        
+        // Otherwise, scan backwards for the last binary operator
+        val operators = listOf('+', '-', '×', '÷', '*', '/', '^', '(')
+        for (i in formula.length - 1 downTo 0) {
+            if (formula[i] in operators) {
+                // Check if this '-' is a unary minus
+                if (formula[i] == '-' && (i == 0 || formula[i - 1] in operators)) {
+                    return i
+                }
+                return i + 1
+            }
+        }
+        return 0
+    }
 }
 
 class Evaluator(private val isDegreeMode: Boolean) {
+    private fun preprocess(expr: String): String {
+        var str = expr.replace("×", "*").replace("÷", "/").replace(" ", "")
+        val sb = StringBuilder()
+        for (i in 0 until str.length) {
+            val curr = str[i]
+            sb.append(curr)
+            if (i < str.length - 1) {
+                val next = str[i + 1]
+                val isCurrEnding = curr.isDigit() || curr == ')' || curr == '%' || curr == '!' || curr == 'π' || curr == 'e'
+                val isNextStarting = next == '(' || next == 'π' || next == 'e' || next == '√' || 
+                                     next == 's' || next == 'c' || next == 't' || next == 'l' || next == 'R' ||
+                                     ((curr == ')' || curr == '%' || curr == '!' || curr == 'π' || curr == 'e') && (next.isDigit() || next == '.'))
+                
+                if (isCurrEnding && isNextStarting) {
+                    if (!(curr == 'e' && next == '^') && !(curr == '3' && next == '√')) {
+                        sb.append('*')
+                    }
+                }
+            }
+        }
+        return sb.toString()
+    }
+
     fun evaluate(expr: String): Double {
-        val str = expr.replace("×", "*").replace("÷", "/").replace(" ", "")
+        val str = preprocess(expr)
         return object : Any() {
             var pos = -1
             var ch = 0
@@ -369,7 +505,7 @@ class Evaluator(private val isDegreeMode: Boolean) {
                                 "log10" -> Math.log10(arg)
                                 "√" -> Math.sqrt(arg)
                                 "cbrt" -> Math.cbrt(arg)
-                                "3√" -> Math.cbrt(arg)
+                                "³√" -> Math.cbrt(arg)
                                 else -> throw RuntimeException("Unknown function: $func")
                             }
                         }
@@ -393,7 +529,7 @@ class Evaluator(private val isDegreeMode: Boolean) {
                     }
                     else if (eat('^'.code)) x = Math.pow(x, parseFactor(null))
                     else if (eat('y'.code) && eat('√'.code)) {
-                         x = Math.pow(parseFactor(null), 1.0 / x)
+                         x = Math.pow(x, 1.0 / parseFactor(null))
                     }
                     else if (eat('E'.code) || eat('e'.code)) {
                         x = x * Math.pow(10.0, parseFactor(null))

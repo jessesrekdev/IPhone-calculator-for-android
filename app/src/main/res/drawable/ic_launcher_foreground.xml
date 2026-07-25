@@ -1,8 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/ic_calc_icon_1784316617908"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Plus -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="8.5"
+        android:strokeLineCap="round"
+        android:pathData="M 54,30 L 54,50 M 44,40 L 64,40" />
+
+    <!-- Divide Line -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="8.5"
+        android:strokeLineCap="round"
+        android:pathData="M 28,70 L 44,70" />
+
+    <!-- Divide Dots -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 36,55 a 4.25,4.25 0 1 0 0,8.5 a 4.25,4.25 0 1 0 0,-8.5 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 36,76.5 a 4.25,4.25 0 1 0 0,8.5 a 4.25,4.25 0 1 0 0,-8.5 z" />
+
+    <!-- Multiply -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="8.5"
+        android:strokeLineCap="round"
+        android:pathData="M 64,62 L 80,78 M 64,78 L 80,62" />
+</vector>
